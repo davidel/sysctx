@@ -1,0 +1,568 @@
+.\"
+.\"  LibSysCTr by Davide Libenzi ( System Call Tracing library )
+.\"  Copyright (C) 2004  Davide Libenzi
+.\"
+.\"  This library is free software; you can redistribute it and/or
+.\"  modify it under the terms of the GNU Lesser General Public
+.\"  License as published by the Free Software Foundation; either
+.\"  version 2.1 of the License, or (at your option) any later version.
+.\"
+.\"  This library is distributed in the hope that it will be useful,
+.\"  but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\"  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+.\"  Lesser General Public License for more details.
+.\"
+.\"  You should have received a copy of the GNU General Public License
+.\"  along with this program; if not, write to the Free Software
+.\"  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+.\"
+.\"  Davide Libenzi <davidel@xmailserver.org>
+.\"
+.na
+.TH LibSysCTr 3 "0.2" "GNU" "System Call Tracing Library"
+.SH NAME
+
+systr_init_library, systr_cleanup_library, systr_run, systr_stop, systr_trace_syscall,
+systr_untrace_syscall, systr_get_pid, systr_get_param, systr_set_params, systr_is_entry,
+systr_pmem_read, systr_pmem_write, systr_pszmem_read \- System Call Tracing Library support functions
+
+.SH SYNOPSIS
+.nf
+.B #include <sysctr.h>
+.sp
+.BI "int systr_init_library(void);"
+.nl
+.BI "void systr_cleanup_library(void);"
+.nl
+.BI "int systr_run(char **" av ");"
+.nl
+.BI "int systr_stop(void);"
+.nl
+.BI "int systr_trace_syscall(int " syscall ", int (*" scfunc ")(void *, trsyscall_t), void *" priv ");"
+.nl
+.BI "int systr_untrace_syscall(int " syscall ");"
+.nl
+.BI "int systr_get_pid(trsyscall_t " tsc ", unsigned long *" pid ");"
+.nl
+.BI "int systr_get_param(trsyscall_t " tsc ", int " param ", unsigned long *" pparam ");"
+.nl
+.BI "int systr_set_params(trsyscall_t " tsc ", ...);"
+.nl
+.BI "int systr_is_entry(trsyscall_t " tsc ");"
+.nl
+.BI "int systr_pmem_read(trsyscall_t " tsc ", int " where ", unsigned long " addr ", char *" buf ", int " size ");"
+.nl
+.BI "int systr_pmem_write(trsyscall_t " tsc ", int " where ", unsigned long " addr ", char *" buf ", int " size ");"
+.nl
+.BI "int systr_pszmem_read(trsyscall_t " tsc ", int " where ", unsigned long " addr ", char *" buf ", int " bmax ");"
+
+.SH DESCRIPTION
+.B LibSysCTr
+is a utility library that can be used to intercept system call functions
+on a Linux system. Process monitoring and sandboxing are just two of the
+potential usages of
+.BR LibSysCTr .
+Internally the
+.B LibSysCTr
+library uses the
+.BR ptrace (2)
+functionalities by monitoring and reporting events to the library caller.
+The
+.B LibSysCTr
+is callback driven, that means that the user initializes the library with
+.BR systr_init_library (),
+registers the system calls he wants to monitor with
+.BR systr_trace_syscall (),
+and calls
+.BR systr_run ()
+to start receiving events in the form of callback invocation. For each intercepted
+system call, two calls to the registered callback function are performed. One during
+the system call entry, before the system call iteself will be executed by the kernel,
+and one after the kernel has processed the system call (right before returning the
+userspace). Utility functions are supplied to, retrieve information about the process,
+get/set the system call parameters, and read/write the monitored process address space.
+The
+.B LibSysCTr
+library follows all threads and processes spawned by the traced task, by giving the
+caller the complete control over the whole monitored process hierarchy.
+
+.SS Functions
+The following functions are defined:
+.TP
+.BI "int systr_init_library(void);"
+
+Initialize the library and makes it ready to accept other calls to library functions.
+It should be called only once at the beginning of the program. It returns 0 in case
+of success, and a value <0 in case of error.
+
+.TP
+.BI "void systr_cleanup_library(void);"
+
+Undo the operations done with the
+.BR systr_init_library ()
+call. It stop the monitoring process and kills all the processes spawned by the
+.BR systr_run ()
+call. It should be called after the return of the
+.BR systr_run (),
+when the user has done using the
+.B LibSysCTr
+library.
+
+.TP
+.BI "int systr_run(char **" av ");"
+
+It starts the monitoring activity on the system calls registered with
+.BR systr_trace_syscall ().
+The
+.I av
+parameter is an arrary of character pointers that specify the process binary
+to be monitored. The
+.IR av [0]
+array element is the path (or name) of the binary file to be executed, while
+the following elements are the parameters supplied to the binary. The
+.I av
+array is terminated by a
+.I NULL
+pointer. The function returns when no more monitored processes are available,
+or when a call to
+.IR systr_stop ()
+is done by the caller. In case of success the function returns 0, while in case
+errors happened during the process, a value <0 is returned.
+
+.TP
+.BI "int systr_stop(void);"
+
+The function stops the internal monitor loop triggered by a call to
+.BR systr_run ()
+and makes the function
+.BR systr_run ()
+to return soon. It is usually called from inside a user callback to stop
+the library event processing. It returns 0 in case of success, and a value
+<0 in case of error.
+
+.TP
+.BI "int systr_trace_syscall(int " syscall ", int (*" scfunc ")(void *, trsyscall_t), void *" priv ");"
+
+The function lets the user to register the system call
+.I syscall
+to be traced by the
+.B LibSysCTr
+library. The parameter
+.I scfunc
+specify a pointer to a callback function that will be invoked at every entry
+and exit from the
+.I syscall
+system call. The callback function template will look like:
+.nf
+
+	int scfunc(void *priv, trsyscall_t tsc) {
+		...
+	}
+
+.fi
+The
+.I priv
+parameter will be passed back to the callback function, and it is treated
+transparently by the
+.B LibSysCTr
+library. The
+.I tsc
+parameter that the callback will receive, is a system call context handle
+that can be used to call other
+.B LibSysCTr
+utility functions. The callback function will return
+.B SYSTR_RET_CONTINUE
+if it wants to continue tracing the current process, or
+.B SYSTR_RET_DETACH
+if it does not want to receive any more notification from the process
+associated with the
+.I tsc
+context. The
+.IR systr_trace_syscall ()
+returns 0 in case of success, and a value <0 in case of error.
+
+.TP
+.BI "int systr_untrace_syscall(int " syscall ");"
+
+Undo the effects of a
+.IR systr_trace_syscall ()
+function call, by unregistering the
+.I syscall
+from the list of the ones monitored by the
+.B LibSysCTr
+library. it returns 0 in case of success, and a value <0 in case of error.
+
+.TP
+.BI "int systr_get_pid(trsyscall_t " tsc ", unsigned long *" pid ");"
+
+The function will be used to retrieve the process ID (pid) associated
+with the current system call context
+.IR tsc .
+The process ID value will be stored in the location pointed by
+.IR pid .
+The
+.BR systr_get_pid ()
+function returns 0 in case of success, and a value <0 in case of error.
+
+.TP
+.BI "int systr_get_param(trsyscall_t " tsc ", int " param ", unsigned long *" pparam ");"
+
+The function lets the caller to retrieve system call parameters (or registers) associated
+with the context
+.IR tsc .
+The
+.I param
+value specify the system call parameter to be retrieved, and it can be one of the following
+values:
+.br
+.IP
+.B SYSTR_SYSCALL
+Returns the system call number.
+.IP
+.B SYSTR_PARAM_1
+Returns the first system call parameter.
+.IP
+.B SYSTR_PARAM_2
+Returns the second system call parameter.
+.IP
+.B SYSTR_PARAM_3
+Returns the third system call parameter.
+.IP
+.B SYSTR_PARAM_4
+Returns the fourth system call parameter.
+.IP
+.B SYSTR_PARAM_5
+Returns the fifth system call parameter.
+.IP
+.B SYSTR_PARAM_6
+Returns the sixth system call parameter.
+.IP
+.B SYSTR_PARAM_RCODE
+Returns the return code of the system call (valid only if the system call is exiting).
+.IP
+.B SYSTR_REG_SP
+Returns the stack pointer of the process that invoked the current system call.
+.IP
+.B SYSTR_REG_IP
+Returns the instruction pointer of the process that invoked the current system call.
+
+The retrieved system call parameter will be stored in the location pointed by
+.IR pparam .
+The function returns 0 in case of success, or a value <0 in case of error.
+
+.TP
+.BI "int systr_set_params(trsyscall_t " tsc ", ...);"
+
+The function lets the caller to set system call parameters (or registers) associated
+with the context
+.IR tsc .
+To optimize the process context writing, the
+.BR systr_set_params ()
+accepts multiple parameter-value cuples to be set at the same time. So, following
+the
+.I tsc
+parameter, there will be a list of
+.IR parameter , value
+couples, terminated with a last
+.I parameter
+equal to \-1. Example:
+.nf
+
+	unsigned long param1, param2;
+
+	systr_set_params(tsc, SYSTR_PARAM_1, &param1, SYSTR_PARAM_2, &param2, -1);
+
+.fi
+The
+.BR systr_set_params ()
+function will return 0 in case of success, or a value <0 in case of error.
+
+.TP
+.BI "int systr_is_entry(trsyscall_t " tsc ");"
+
+The
+.B LibSysCTr
+system call interception will trigger two callback invocations per each system call.
+One on system call entry, and one on exit. The
+.BR systr_is_entry ()
+function can be used to distinguish between the entry and the exit from the system call.
+It returns a value different from 0 in case it is an entry call, or 0 in case it is
+an exit.
+
+.TP
+.BI "int systr_pmem_read(trsyscall_t " tsc ", int " where ", unsigned long " addr ", char *" buf ", int " size ");"
+
+The function lets the caller to read the memory of the process associated
+with the context
+.IR tsc .
+The
+.I where
+parameter is either:
+.br
+.IP
+.B SYSTR_DATA_SECT
+Read memory from the
+.B DATA
+section
+.IP
+.B SYSTR_TEXT_SECT
+Read memory from the
+.B TEXT
+section
+
+The
+.I addr
+parameter specify the address, in the traced process address space, from where
+to start the read operation, and the
+.I size
+parameter specifies the size in bytes of the block to be read. The read data will
+be stored in the buffer pointed by
+.IR buf .
+The function return the number of bytes read (usually
+.IR size ),
+or a number lower than
+.I size
+in case errors happened.
+
+.TP
+.BI "int systr_pmem_write(trsyscall_t " tsc ", int " where ", unsigned long " addr ", char *" buf ", int " size ");"
+
+The function lets the caller to write the memory of the process associated
+with the context
+.IR tsc .
+The
+.I where
+parameter is either:
+.br
+.IP
+.B SYSTR_DATA_SECT
+Write memory to the
+.B DATA
+section
+.IP
+.B SYSTR_TEXT_SECT
+Write memory to the
+.B TEXT
+section
+
+The
+.I addr
+parameter specify the address, in the traced process address space, from where
+to start the write operation, and the
+.I size
+parameter specifies the size in bytes of the block to be written. The data will
+be read from the user buffer pointed by
+.IR buf .
+The function return the number of bytes written (usually
+.IR size ),
+or a number lower than
+.I size
+in case errors happened.
+
+.TP
+.BI "int systr_pszmem_read(trsyscall_t " tsc ", int " where ", unsigned long " addr ", char *" buf ", int " bmax ");"
+
+The function lets the caller to read the memory of the process associated
+with the context
+.IR tsc .
+The data will be read as zero-terminated string, up to
+.I bmax
+bytes. The
+.I where
+parameter is either:
+.br
+.IP
+.B SYSTR_DATA_SECT
+Read memory from the
+.B DATA
+section
+.IP
+.B SYSTR_TEXT_SECT
+Read memory from the
+.B TEXT
+section
+
+The
+.I addr
+parameter specify the address, in the traced process address space, from where
+to start the read operation. The read data will
+be stored in the buffer pointed by
+.IR buf .
+The function return the number of bytes read, or \-1 in case of error.
+
+.SH EXAMPLE
+The follwoing example shows a few lines of C code that uses the
+.B LibSysCTr
+library to intercept a few system calls and print parameters during the monitored
+process life.
+.nf
+
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <signal.h>
+	#include <unistd.h>
+	#include <errno.h>
+	#include <string.h>
+	#include <linux/unistd.h>
+	#include <sysctr.h>
+
+	static int open_scfunc(void *priv, trsyscall_t tsc) {
+		int entry;
+		unsigned long pid, param, rcode;
+		char buf[512];
+	
+		systr_get_pid(tsc, &pid);
+		entry = systr_is_entry(tsc);
+		systr_get_param(tsc, SYSTR_PARAM_1, &param);
+		if (!entry)
+			systr_get_param(tsc, SYSTR_PARAM_RCODE, &rcode);
+		buf[0] = 0;
+		systr_pszmem_read(tsc, SYSTR_DATA_SECT, param, buf, sizeof(buf) - 1);
+	
+		fprintf(stderr, "[%lu] %s open(%s)", pid, entry ? "E": "X", buf);
+	
+		if (entry)
+			fprintf(stderr, " = ?\n");
+		else
+			fprintf(stderr, " = %lu\n", rcode);
+	
+		return SYSTR_RET_CONTINUE;
+	}
+	
+	static int close_scfunc(void *priv, trsyscall_t tsc) {
+		int entry;
+		unsigned long pid, param;
+	
+		systr_get_pid(tsc, &pid);
+		entry = systr_is_entry(tsc);
+		systr_get_param(tsc, SYSTR_PARAM_1, &param);
+	
+		fprintf(stderr, "[%lu] %s close(%d)\n", pid, entry ? "E": "X", param);
+	
+		return SYSTR_RET_CONTINUE;
+	}
+	
+	static int exec_scfunc(void *priv, trsyscall_t tsc) {
+		int entry;
+		unsigned long pid, param;
+		char buf[512];
+	
+		systr_get_pid(tsc, &pid);
+		entry = systr_is_entry(tsc);
+		systr_get_param(tsc, SYSTR_PARAM_1, &param);
+		buf[0] = 0;
+		if (entry)
+			systr_pszmem_read(tsc, SYSTR_DATA_SECT, param, buf, sizeof(buf) - 1);
+	
+		fprintf(stderr, "[%lu] %s exec(%s)\n", pid, entry ? "E": "X", buf);
+	
+		return SYSTR_RET_CONTINUE;
+	}
+	
+	static int fork_scfunc(void *priv, trsyscall_t tsc) {
+		int entry;
+		unsigned long pid, cpid;
+	
+		systr_get_pid(tsc, &pid);
+		entry = systr_is_entry(tsc);
+		if (entry)
+			fprintf(stderr, "[%lu] E fork()\n", pid);
+		else {
+			systr_get_param(tsc, SYSTR_PARAM_RCODE, &cpid);
+			fprintf(stderr, "[%lu] X fork() -> %lu\n", pid, cpid);
+		}
+	
+		return SYSTR_RET_CONTINUE;
+	}
+	
+	static int wait_scfunc(void *priv, trsyscall_t tsc) {
+		int entry;
+		unsigned long pid, res, wpid, options;
+	
+		systr_get_pid(tsc, &pid);
+		systr_get_param(tsc, SYSTR_PARAM_1, &wpid);
+		systr_get_param(tsc, SYSTR_PARAM_3, &options);
+		entry = systr_is_entry(tsc);
+		if (entry)
+			fprintf(stderr, "[%lu] E wait(%ld, %lu)\n", pid, wpid, options);
+		else {
+			systr_get_param(tsc, SYSTR_PARAM_RCODE, &res);
+			fprintf(stderr, "[%lu] X wait(%ld, %lu) = %ld\n", pid, wpid, options, res);
+		}
+	
+		return SYSTR_RET_CONTINUE;
+	}
+	
+	int main(int ac, char **av) {
+	
+		if (systr_init_library() < 0)
+			return 1;
+	
+		systr_trace_syscall(__NR_execve, exec_scfunc, NULL);
+		systr_trace_syscall(__NR_open, open_scfunc, NULL);
+		systr_trace_syscall(__NR_close, close_scfunc, NULL);
+		systr_trace_syscall(__NR_fork, fork_scfunc, NULL);
+		systr_trace_syscall(__NR_vfork, fork_scfunc, NULL);
+		systr_trace_syscall(__NR_clone, fork_scfunc, NULL);
+		systr_trace_syscall(__NR_waitpid, wait_scfunc, NULL);
+		systr_trace_syscall(__NR_wait4, wait_scfunc, NULL);
+	
+		systr_run(&av[i]);
+	
+		systr_cleanup_library();
+	
+		return 0;
+	}
+
+.fi
+
+.SH LIMITATIONS
+The
+.B init
+process cannot be traced using the
+.B LibSysCTr
+library (ptrace limitation). Also, setuid binaries will be traced using the caller
+permissions, and not the suid ones (ptrace security constraint). The
+.BR strace (1)
+command will not work when run from inside a shell monitored by
+.BR LibSysCTr .
+Same thing for the
+.BR gdb (1)
+debugger (and more in general for all debuggers using the
+.BR ptrace (2)
+system call). Currently
+.B LibSysCTr
+supports only i386 CPUs, but it is easily extendible to other CPUs supported by
+the Linux OS (adding CPU support by extending the
+.I sctr_linux.h
+include file). If you do extend
+.B LibSysCTr
+support to other CPUs, please send
+.I sctr_linux.h
+patches to
+.RB < davidel@xmailserver.org >.
+
+.SH LICENSE
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+A copy of the license is available at :
+
+.BR http://www.gnu.org/copyleft/lesser.html
+
+.SH AUTHOR
+Developed by Davide Libenzi
+.RB < davidel@xmailserver.org >
+
+.SH AVAILABILITY
+The latest version of
+.B LibSysCTr
+can be found at :
+
+.BR http://www.xmailserver.org/sysctr-lib.html
+
+.SH BUGS
+There are no known bugs.  Bug reports and comments to Davide Libenzi
+.RB < davidel@xmailserver.org >
+

@@ -1,0 +1,90 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta name="Author" content="Davide Libenzi">
+  <meta name="GENERATOR" content="Mozilla 1.2">
+  <meta name="Keywords"
+ content="system call,ptrace,linux,trace,application,firewall,sandbox">
+  <title>LibSysCTr Home Page</title>
+</head>
+<body style="color: rgb(0, 0, 255);">
+<p align="center"><font size="+1"><b>LibSysCTr</b><br>
+by<br>
+<a href="http://www.xmailserver.org/davide.html"> Davide Libenzi</a>
+&lt;<a href="mailto:davidel@xmailserver.org">davidel@xmailserver.org</a>&gt;<br>
+</font></p>
+<p align="left"><b>LibSysCTr</b>
+is a utility library that can be used to intercept system call
+functions
+on a Linux system. Process monitoring and sandboxing are just two of
+the
+potential usages of
+<b>LibSysCTr</b>.
+Internally the
+<b>LibSysCTr</b>
+library uses the
+<b><a href="http://localhost/cgi-bin/man/man2html?2+ptrace">ptrace</a></b>(2)
+functionalities by monitoring and reporting events to the library
+caller.
+The
+<b>LibSysCTr</b>
+is callback driven, that means that the user initializes the library
+with
+<b>systr_init_library</b>(),
+registers the system calls he wants to monitor with
+<b>systr_trace_syscall</b>(),
+and calls
+<b>systr_run</b>()
+to start receiving events in the form of callback invocation. For each
+intercepted
+system call, two calls to the registered callback function are
+performed. One during
+the system call entry, before the system call iteself will be executed
+by the kernel,
+and one after the kernel has processed the system call (right before
+returning the
+userspace). Utility functions are supplied to, retrieve information
+about the process,
+get/set the system call parameters, and read/write the monitored
+process address space.
+The
+<b>LibSysCTr</b>
+library follows all threads and processes spawned by the traced task,
+by giving the
+caller the complete control over the whole monitored process hierarchy.<br>
+</p>
+<p align="left"><br>
+<br>
+</p>
+<p style="text-align: center;"><b><font size="+1">Documentation<br>
+</font></b></p>
+<div style="text-align: left;"><br>
+The <span style="font-weight: bold;">LibSysCTr</span> library man page
+is available : <a href="sysctr.html">HTML</a>&nbsp;&nbsp;&nbsp;<a
+ href="sysctr.txt">TXT</a>&nbsp;&nbsp;&nbsp; <a href="sysctr.pdf">PDF<br>
+</a><br>
+<br>
+</div>
+<p align="center"><b><font size="+1">License and Software</font></b></p>
+<p align="left"><span style="font-weight: bold;">LibSysCTr</span>
+is made available through the <a
+ href="http://www.gnu.org/copyleft/lesser.html">GNU LGPL</a> license
+together with the complete sources. Please read carefully the <a
+ href="http://www.gnu.org/copyleft/lesser.html">license</a> before
+using
+the software. The latest library package is available here :</p>
+<p align="left"><a href="libsysctr-0.2.tar.gz">Version
+0.2</a></p>
+<p align="left"><br>
+</p>
+<p style="text-align: center;"><b><font size="+1">Links And Docs<br>
+</font></b></p>
+<div style="text-align: left;"><a
+ href="http://freshmeat.net/projects/sysctr-lib">LibSysCTr FreshMeat
+Home
+Page</a><a href="http://www.gnu.org/software/diffutils/diffutils.html"><br>
+</a><br>
+<br>
+</div>
+</body>
+</html>

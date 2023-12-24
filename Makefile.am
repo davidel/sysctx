@@ -1,0 +1,3 @@
+
+SUBDIRS = . sysctr man test
+

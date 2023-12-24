@@ -1,0 +1,715 @@
+<HTML><HEAD><TITLE>Manpage of LibSysCTr</TITLE>
+</HEAD><BODY text="#0000FF" bgcolor="#FFFFFF">
+<H1>LibSysCTr</H1>
+Section: System Call Tracing Library (3)<BR>Updated: 0.2<BR><A HREF="#index">Index</A>
+<A HREF="http://localhost/cgi-bin/man/man2html">Return to Main Contents</A><HR>
+
+<A NAME="lbAB">&nbsp;</A>
+<H2>NAME</H2>
+
+<P>
+systr_init_library, systr_cleanup_library, systr_run, systr_stop, systr_trace_syscall,
+systr_untrace_syscall, systr_get_pid, systr_get_param, systr_set_params, systr_is_entry,
+systr_pmem_read, systr_pmem_write, systr_pszmem_read - System Call Tracing Library support functions
+<P>
+<A NAME="lbAC">&nbsp;</A>
+<H2>SYNOPSIS</H2>
+
+<PRE>
+<B>#include &lt;<A HREF="file:/usr/include/sysctr.h">sysctr.h</A>&gt;</B>
+
+<B>int systr_init_library(void);</B>
+<B>void systr_cleanup_library(void);</B>
+<B>int systr_run(char **</B><I>av</I><B>);</B>
+<B>int systr_stop(void);</B>
+<B>int systr_trace_syscall(int </B><I>syscall</I><B>, int (*</B><I>scfunc</I><B>)(void *, trsyscall_t), void *</B><I>priv</I><B>);</B>
+<B>int systr_untrace_syscall(int </B><I>syscall</I><B>);</B>
+<B>int systr_get_pid(trsyscall_t </B><I>tsc</I><B>, unsigned long *</B><I>pid</I><B>);</B>
+<B>int systr_get_param(trsyscall_t </B><I>tsc</I><B>, int </B><I>param</I><B>, unsigned long *</B><I>pparam</I><B>);</B>
+<B>int systr_set_params(trsyscall_t </B><I>tsc</I><B>, ...);</B>
+<B>int systr_is_entry(trsyscall_t </B><I>tsc</I><B>);</B>
+<B>int systr_pmem_read(trsyscall_t </B><I>tsc</I><B>, int </B><I>where</I><B>, unsigned long </B><I>addr</I><B>, char *</B><I>buf</I><B>, int </B><I>size</I><B>);</B>
+<B>int systr_pmem_write(trsyscall_t </B><I>tsc</I><B>, int </B><I>where</I><B>, unsigned long </B><I>addr</I><B>, char *</B><I>buf</I><B>, int </B><I>size</I><B>);</B>
+<B>int systr_pszmem_read(trsyscall_t </B><I>tsc</I><B>, int </B><I>where</I><B>, unsigned long </B><I>addr</I><B>, char *</B><I>buf</I><B>, int </B><I>bmax</I><B>);</B>
+
+</PRE><A NAME="lbAD">&nbsp;</A>
+<H2>DESCRIPTION</H2>
+
+<B>LibSysCTr</B>
+
+is a utility library that can be used to intercept system call functions
+on a Linux system. Process monitoring and sandboxing are just two of the
+potential usages of
+<B>LibSysCTr</B>.
+
+Internally the
+<B>LibSysCTr</B>
+
+library uses the
+<B><A HREF="http://localhost/cgi-bin/man/man2html?2+ptrace">ptrace</A></B>(2)
+
+functionalities by monitoring and reporting events to the library caller.
+The
+<B>LibSysCTr</B>
+
+is callback driven, that means that the user initializes the library with
+<B>systr_init_library</B>(),
+
+registers the system calls he wants to monitor with
+<B>systr_trace_syscall</B>(),
+
+and calls
+<B>systr_run</B>()
+
+to start receiving events in the form of callback invocation. For each intercepted
+system call, two calls to the registered callback function are performed. One during
+the system call entry, before the system call iteself will be executed by the kernel,
+and one after the kernel has processed the system call (right before returning the
+userspace). Utility functions are supplied to, retrieve information about the process,
+get/set the system call parameters, and read/write the monitored process address space.
+The
+<B>LibSysCTr</B>
+
+library follows all threads and processes spawned by the traced task, by giving the
+caller the complete control over the whole monitored process hierarchy.
+<P>
+<A NAME="lbAE">&nbsp;</A>
+<H3>Functions</H3>
+
+The following functions are defined:
+<DL COMPACT>
+<DT><B>int systr_init_library(void);</B>
+
+<DD>
+<P>
+Initialize the library and makes it ready to accept other calls to library functions.
+It should be called only once at the beginning of the program. It returns 0 in case
+of success, and a value &lt;0 in case of error.
+<P>
+<DT><B>void systr_cleanup_library(void);</B>
+
+<DD>
+<P>
+Undo the operations done with the
+<B>systr_init_library</B>()
+
+call. It stop the monitoring process and kills all the processes spawned by the
+<B>systr_run</B>()
+
+call. It should be called after the return of the
+<B>systr_run</B>(),
+
+when the user has done using the
+<B>LibSysCTr</B>
+
+library.
+<P>
+<DT><B>int systr_run(char **</B><I>av</I><B>);</B>
+
+<DD>
+<P>
+It starts the monitoring activity on the system calls registered with
+<B>systr_trace_syscall</B>().
+
+The
+<I>av</I>
+
+parameter is an arrary of character pointers that specify the process binary
+to be monitored. The
+<I>av</I>[0]
+
+array element is the path (or name) of the binary file to be executed, while
+the following elements are the parameters supplied to the binary. The
+<I>av</I>
+
+array is terminated by a
+<I>NULL</I>
+
+pointer. The function returns when no more monitored processes are available,
+or when a call to
+<I>systr_stop</I>()
+
+is done by the caller. In case of success the function returns 0, while in case
+errors happened during the process, a value &lt;0 is returned.
+<P>
+<DT><B>int systr_stop(void);</B>
+
+<DD>
+<P>
+The function stops the internal monitor loop triggered by a call to
+<B>systr_run</B>()
+
+and makes the function
+<B>systr_run</B>()
+
+to return soon. It is usually called from inside a user callback to stop
+the library event processing. It returns 0 in case of success, and a value
+&lt;0 in case of error.
+<P>
+<DT><B>int systr_trace_syscall(int </B><I>syscall</I><B>, int (*</B><I>scfunc</I><B>)(void *, trsyscall_t), void *</B><I>priv</I><B>);</B>
+
+<DD>
+<P>
+The function lets the user to register the system call
+<I>syscall</I>
+
+to be traced by the
+<B>LibSysCTr</B>
+
+library. The parameter
+<I>scfunc</I>
+
+specify a pointer to a callback function that will be invoked at every entry
+and exit from the
+<I>syscall</I>
+
+system call. The callback function template will look like:
+<PRE>
+
+        int scfunc(void *priv, trsyscall_t tsc) {
+                ...
+        }
+
+</PRE>
+
+The
+<I>priv</I>
+
+parameter will be passed back to the callback function, and it is treated
+transparently by the
+<B>LibSysCTr</B>
+
+library. The
+<I>tsc</I>
+
+parameter that the callback will receive, is a system call context handle
+that can be used to call other
+<B>LibSysCTr</B>
+
+utility functions. The callback function will return
+<B>SYSTR_RET_CONTINUE</B>
+
+if it wants to continue tracing the current process, or
+<B>SYSTR_RET_DETACH</B>
+
+if it does not want to receive any more notification from the process
+associated with the
+<I>tsc</I>
+
+context. The
+<I>systr_trace_syscall</I>()
+
+returns 0 in case of success, and a value &lt;0 in case of error.
+<P>
+<DT><B>int systr_untrace_syscall(int </B><I>syscall</I><B>);</B>
+
+<DD>
+<P>
+Undo the effects of a
+<I>systr_trace_syscall</I>()
+
+function call, by unregistering the
+<I>syscall</I>
+
+from the list of the ones monitored by the
+<B>LibSysCTr</B>
+
+library. it returns 0 in case of success, and a value &lt;0 in case of error.
+<P>
+<DT><B>int systr_get_pid(trsyscall_t </B><I>tsc</I><B>, unsigned long *</B><I>pid</I><B>);</B>
+
+<DD>
+<P>
+The function will be used to retrieve the process ID (pid) associated
+with the current system call context
+<I>tsc</I>.
+
+The process ID value will be stored in the location pointed by
+<I>pid</I>.
+
+The
+<B>systr_get_pid</B>()
+
+function returns 0 in case of success, and a value &lt;0 in case of error.
+<P>
+<DT><B>int systr_get_param(trsyscall_t </B><I>tsc</I><B>, int </B><I>param</I><B>, unsigned long *</B><I>pparam</I><B>);</B>
+
+<DD>
+<P>
+The function lets the caller to retrieve system call parameters (or registers) associated
+with the context
+<I>tsc</I>.
+
+The
+<I>param</I>
+
+value specify the system call parameter to be retrieved, and it can be one of the following
+values:
+<BR>
+
+<DT><DD>
+<B>SYSTR_SYSCALL</B>
+
+Returns the system call number.
+<DT><DD>
+<B>SYSTR_PARAM_1</B>
+
+Returns the first system call parameter.
+<DT><DD>
+<B>SYSTR_PARAM_2</B>
+
+Returns the second system call parameter.
+<DT><DD>
+<B>SYSTR_PARAM_3</B>
+
+Returns the third system call parameter.
+<DT><DD>
+<B>SYSTR_PARAM_4</B>
+
+Returns the fourth system call parameter.
+<DT><DD>
+<B>SYSTR_PARAM_5</B>
+
+Returns the fifth system call parameter.
+<DT><DD>
+<B>SYSTR_PARAM_6</B>
+
+Returns the sixth system call parameter.
+<DT><DD>
+<B>SYSTR_PARAM_RCODE</B>
+
+Returns the return code of the system call (valid only if the system call is exiting).
+<DT><DD>
+<B>SYSTR_REG_SP</B>
+
+Returns the stack pointer of the process that invoked the current system call.
+<DT><DD>
+<B>SYSTR_REG_IP</B>
+
+Returns the instruction pointer of the process that invoked the current system call.
+<P>
+The retrieved system call parameter will be stored in the location pointed by
+<I>pparam</I>.
+
+The function returns 0 in case of success, or a value &lt;0 in case of error.
+<P>
+<DT><B>int systr_set_params(trsyscall_t </B><I>tsc</I><B>, ...);</B>
+
+<DD>
+<P>
+The function lets the caller to set system call parameters (or registers) associated
+with the context
+<I>tsc</I>.
+
+To optimize the process context writing, the
+<B>systr_set_params</B>()
+
+accepts multiple parameter-value cuples to be set at the same time. So, following
+the
+<I>tsc</I>
+
+parameter, there will be a list of
+<I>parameter</I>,<I>value</I>
+
+couples, terminated with a last
+<I>parameter</I>
+
+equal to -1. Example:
+<PRE>
+
+        unsigned long param1, param2;
+
+        systr_set_params(tsc, SYSTR_PARAM_1, &amp;param1, SYSTR_PARAM_2, &amp;param2, -1);
+
+</PRE>
+
+The
+<B>systr_set_params</B>()
+
+function will return 0 in case of success, or a value &lt;0 in case of error.
+<P>
+<DT><B>int systr_is_entry(trsyscall_t </B><I>tsc</I><B>);</B>
+
+<DD>
+<P>
+The
+<B>LibSysCTr</B>
+
+system call interception will trigger two callback invocations per each system call.
+One on system call entry, and one on exit. The
+<B>systr_is_entry</B>()
+
+function can be used to distinguish between the entry and the exit from the system call.
+It returns a value different from 0 in case it is an entry call, or 0 in case it is
+an exit.
+<P>
+<DT><B>int systr_pmem_read(trsyscall_t </B><I>tsc</I><B>, int </B><I>where</I><B>, unsigned long </B><I>addr</I><B>, char *</B><I>buf</I><B>, int </B><I>size</I><B>);</B>
+
+<DD>
+<P>
+The function lets the caller to read the memory of the process associated
+with the context
+<I>tsc</I>.
+
+The
+<I>where</I>
+
+parameter is either:
+<BR>
+
+<DT><DD>
+<B>SYSTR_DATA_SECT</B>
+
+Read memory from the
+<B>DATA</B>
+
+section
+<DT><DD>
+<B>SYSTR_TEXT_SECT</B>
+
+Read memory from the
+<B>TEXT</B>
+
+section
+<P>
+The
+<I>addr</I>
+
+parameter specify the address, in the traced process address space, from where
+to start the read operation, and the
+<I>size</I>
+
+parameter specifies the size in bytes of the block to be read. The read data will
+be stored in the buffer pointed by
+<I>buf</I>.
+
+The function return the number of bytes read (usually
+<I>size</I>),
+
+or a number lower than
+<I>size</I>
+
+in case errors happened.
+<P>
+<DT><B>int systr_pmem_write(trsyscall_t </B><I>tsc</I><B>, int </B><I>where</I><B>, unsigned long </B><I>addr</I><B>, char *</B><I>buf</I><B>, int </B><I>size</I><B>);</B>
+
+<DD>
+<P>
+The function lets the caller to write the memory of the process associated
+with the context
+<I>tsc</I>.
+
+The
+<I>where</I>
+
+parameter is either:
+<BR>
+
+<DT><DD>
+<B>SYSTR_DATA_SECT</B>
+
+Write memory to the
+<B>DATA</B>
+
+section
+<DT><DD>
+<B>SYSTR_TEXT_SECT</B>
+
+Write memory to the
+<B>TEXT</B>
+
+section
+<P>
+The
+<I>addr</I>
+
+parameter specify the address, in the traced process address space, from where
+to start the write operation, and the
+<I>size</I>
+
+parameter specifies the size in bytes of the block to be written. The data will
+be read from the user buffer pointed by
+<I>buf</I>.
+
+The function return the number of bytes written (usually
+<I>size</I>),
+
+or a number lower than
+<I>size</I>
+
+in case errors happened.
+<P>
+<DT><B>int systr_pszmem_read(trsyscall_t </B><I>tsc</I><B>, int </B><I>where</I><B>, unsigned long </B><I>addr</I><B>, char *</B><I>buf</I><B>, int </B><I>bmax</I><B>);</B>
+
+<DD>
+<P>
+The function lets the caller to read the memory of the process associated
+with the context
+<I>tsc</I>.
+
+The data will be read as zero-terminated string, up to
+<I>bmax</I>
+
+bytes. The
+<I>where</I>
+
+parameter is either:
+<BR>
+
+<DT><DD>
+<B>SYSTR_DATA_SECT</B>
+
+Read memory from the
+<B>DATA</B>
+
+section
+<DT><DD>
+<B>SYSTR_TEXT_SECT</B>
+
+Read memory from the
+<B>TEXT</B>
+
+section
+<P>
+The
+<I>addr</I>
+
+parameter specify the address, in the traced process address space, from where
+to start the read operation. The read data will
+be stored in the buffer pointed by
+<I>buf</I>.
+
+The function return the number of bytes read, or -1 in case of error.
+<P>
+</DL>
+<A NAME="lbAF">&nbsp;</A>
+<H2>EXAMPLE</H2>
+
+The follwoing example shows a few lines of C code that uses the
+<B>LibSysCTr</B>
+
+library to intercept a few system calls and print parameters during the monitored
+process life.
+<PRE>
+
+        #include &lt;<A HREF="file:/usr/include/stdio.h">stdio.h</A>&gt;
+        #include &lt;<A HREF="file:/usr/include/stdlib.h">stdlib.h</A>&gt;
+        #include &lt;<A HREF="file:/usr/include/signal.h">signal.h</A>&gt;
+        #include &lt;<A HREF="file:/usr/include/unistd.h">unistd.h</A>&gt;
+        #include &lt;<A HREF="file:/usr/include/errno.h">errno.h</A>&gt;
+        #include &lt;<A HREF="file:/usr/include/string.h">string.h</A>&gt;
+        #include &lt;<A HREF="file:/usr/include/linux/unistd.h">linux/unistd.h</A>&gt;
+        #include &lt;<A HREF="file:/usr/include/sysctr.h">sysctr.h</A>&gt;
+
+        static int open_scfunc(void *priv, trsyscall_t tsc) {
+                int entry;
+                unsigned long pid, param, rcode;
+                char buf[512];
+        
+                systr_get_pid(tsc, &amp;pid);
+                entry = systr_is_entry(tsc);
+                systr_get_param(tsc, SYSTR_PARAM_1, &amp;param);
+                if (!entry)
+                        systr_get_param(tsc, SYSTR_PARAM_RCODE, &amp;rcode);
+                buf[0] = 0;
+                systr_pszmem_read(tsc, SYSTR_DATA_SECT, param, buf, sizeof(buf) - 1);
+        
+                fprintf(stderr, &quot;[%lu] %s open(%s)&quot;, pid, entry ? &quot;E&quot;: &quot;X&quot;, buf);
+        
+                if (entry)
+                        fprintf(stderr, &quot; = ?);
+                else
+                        fprintf(stderr, &quot; = %lu, rcode);
+        
+                return SYSTR_RET_CONTINUE;
+        }
+        
+        static int close_scfunc(void *priv, trsyscall_t tsc) {
+                int entry;
+                unsigned long pid, param;
+        
+                systr_get_pid(tsc, &amp;pid);
+                entry = systr_is_entry(tsc);
+                systr_get_param(tsc, SYSTR_PARAM_1, &amp;param);
+        
+                fprintf(stderr, &quot;[%lu] %s close(%d), pid, entry ? &quot;E&quot;: &quot;X&quot;, param);
+        
+                return SYSTR_RET_CONTINUE;
+        }
+        
+        static int exec_scfunc(void *priv, trsyscall_t tsc) {
+                int entry;
+                unsigned long pid, param;
+                char buf[512];
+        
+                systr_get_pid(tsc, &amp;pid);
+                entry = systr_is_entry(tsc);
+                systr_get_param(tsc, SYSTR_PARAM_1, &amp;param);
+                buf[0] = 0;
+                if (entry)
+                        systr_pszmem_read(tsc, SYSTR_DATA_SECT, param, buf, sizeof(buf) - 1);
+        
+                fprintf(stderr, &quot;[%lu] %s exec(%s), pid, entry ? &quot;E&quot;: &quot;X&quot;, buf);
+        
+                return SYSTR_RET_CONTINUE;
+        }
+        
+        static int fork_scfunc(void *priv, trsyscall_t tsc) {
+                int entry;
+                unsigned long pid, cpid;
+        
+                systr_get_pid(tsc, &amp;pid);
+                entry = systr_is_entry(tsc);
+                if (entry)
+                        fprintf(stderr, &quot;[%lu] E fork(), pid);
+                else {
+                        systr_get_param(tsc, SYSTR_PARAM_RCODE, &amp;cpid);
+                        fprintf(stderr, &quot;[%lu] X fork() -&gt; %lu, pid, cpid);
+                }
+        
+                return SYSTR_RET_CONTINUE;
+        }
+        
+        static int wait_scfunc(void *priv, trsyscall_t tsc) {
+                int entry;
+                unsigned long pid, res, wpid, options;
+        
+                systr_get_pid(tsc, &amp;pid);
+                systr_get_param(tsc, SYSTR_PARAM_1, &amp;wpid);
+                systr_get_param(tsc, SYSTR_PARAM_3, &amp;options);
+                entry = systr_is_entry(tsc);
+                if (entry)
+                        fprintf(stderr, &quot;[%lu] E wait(%ld, %lu), pid, wpid, options);
+                else {
+                        systr_get_param(tsc, SYSTR_PARAM_RCODE, &amp;res);
+                        fprintf(stderr, &quot;[%lu] X wait(%ld, %lu) = %ld, pid, wpid, options, res);
+                }
+        
+                return SYSTR_RET_CONTINUE;
+        }
+        
+        int main(int ac, char **av) {
+        
+                if (systr_init_library() &lt; 0)
+                        return 1;
+        
+                systr_trace_syscall(__NR_execve, exec_scfunc, NULL);
+                systr_trace_syscall(__NR_open, open_scfunc, NULL);
+                systr_trace_syscall(__NR_close, close_scfunc, NULL);
+                systr_trace_syscall(__NR_fork, fork_scfunc, NULL);
+                systr_trace_syscall(__NR_vfork, fork_scfunc, NULL);
+                systr_trace_syscall(__NR_clone, fork_scfunc, NULL);
+                systr_trace_syscall(__NR_waitpid, wait_scfunc, NULL);
+                systr_trace_syscall(__NR_wait4, wait_scfunc, NULL);
+        
+                systr_run(&amp;av[i]);
+        
+                systr_cleanup_library();
+        
+                return 0;
+        }
+
+</PRE>
+
+<P>
+<A NAME="lbAG">&nbsp;</A>
+<H2>LIMITATIONS</H2>
+
+The
+<B>init</B>
+
+process cannot be traced using the
+<B>LibSysCTr</B>
+
+library (ptrace limitation). Also, setuid binaries will be traced using the caller
+permissions, and not the suid ones (ptrace security constraint). The
+<B><A HREF="http://localhost/cgi-bin/man/man2html?1+strace">strace</A></B>(1)
+
+command will not work when run from inside a shell monitored by
+<B>LibSysCTr</B>.
+
+Same thing for the
+<B><A HREF="http://localhost/cgi-bin/man/man2html?1+gdb">gdb</A></B>(1)
+
+debugger (and more in general for all debuggers using the
+<B><A HREF="http://localhost/cgi-bin/man/man2html?2+ptrace">ptrace</A></B>(2)
+
+system call). Currently
+<B>LibSysCTr</B>
+
+supports only i386 CPUs, but it is easily extendible to other CPUs supported by
+the Linux OS (adding CPU support by extending the
+<I>sctr_linux.h</I>
+
+include file). If you do extend
+<B>LibSysCTr</B>
+
+support to other CPUs, please send
+<I>sctr_linux.h</I>
+
+patches to
+&lt;<B><A HREF="mailto:davidel@xmailserver.org">davidel@xmailserver.org</A></B>&gt;.
+
+<P>
+<A NAME="lbAH">&nbsp;</A>
+<H2>LICENSE</H2>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+A copy of the license is available at :
+<P>
+<B><A HREF="http://www.gnu.org/copyleft/lesser.html">http://www.gnu.org/copyleft/lesser.html</A></B>
+
+<P>
+<A NAME="lbAI">&nbsp;</A>
+<H2>AUTHOR</H2>
+
+Developed by Davide Libenzi
+&lt;<B><A HREF="mailto:davidel@xmailserver.org">davidel@xmailserver.org</A></B>&gt;
+
+<P>
+<A NAME="lbAJ">&nbsp;</A>
+<H2>AVAILABILITY</H2>
+
+The latest version of
+<B>LibSysCTr</B>
+
+can be found at :
+<P>
+<B><A HREF="http://www.xmailserver.org/sysctr-lib.html">http://www.xmailserver.org/sysctr-lib.html</A></B>
+
+<P>
+<A NAME="lbAK">&nbsp;</A>
+<H2>BUGS</H2>
+
+There are no known bugs.  Bug reports and comments to Davide Libenzi
+&lt;<B><A HREF="mailto:davidel@xmailserver.org">davidel@xmailserver.org</A></B>&gt;
+
+<P>
+<P>
+
+<HR>
+<A NAME="index">&nbsp;</A><H2>Index</H2>
+<DL>
+<DT><A HREF="#lbAB">NAME</A><DD>
+<DT><A HREF="#lbAC">SYNOPSIS</A><DD>
+<DT><A HREF="#lbAD">DESCRIPTION</A><DD>
+<DL>
+<DT><A HREF="#lbAE">Functions</A><DD>
+</DL>
+<DT><A HREF="#lbAF">EXAMPLE</A><DD>
+<DT><A HREF="#lbAG">LIMITATIONS</A><DD>
+<DT><A HREF="#lbAH">LICENSE</A><DD>
+<DT><A HREF="#lbAI">AUTHOR</A><DD>
+<DT><A HREF="#lbAJ">AVAILABILITY</A><DD>
+<DT><A HREF="#lbAK">BUGS</A><DD>
+</DL>
+<HR>
+This document was created by
+<A HREF="http://localhost/cgi-bin/man/man2html">man2html</A>,
+using the manual pages.<BR>
+Time: 18:02:16 GMT, May 21, 2004
+</BODY>
+</HTML>
